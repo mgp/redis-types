@@ -29,7 +29,6 @@
 #include "ziplist.h" /* Compact list data structure */
 #include "intset.h" /* Compact integer set structure */
 #include "version.h"
-#include "util.h"
 
 /* Error codes */
 #define REDIS_OK                0
