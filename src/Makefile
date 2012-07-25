@@ -42,26 +42,27 @@ endif
 CCOPT= $(CFLAGS) $(ARCH) $(PROF)
 
 # OBJ = dict.o redis.o zmalloc.o zipmap.o ziplist.o t_string.o t_list.o t_set.o t_zset.o t_hash.o intset.o config.o
-OBJ = dict.o redis.o zmalloc.o zipmap.o ziplist.o t_string.o t_list.o t_set.o t_zset.o t_hash.o intset.o config.o
+OBJ = adlist.o dict.o redis.o zmalloc.o zipmap.o ziplist.o t_string.o t_list.o t_set.o t_zset.o t_hash.o intset.o config.o
 
 # Deps (use make dep to generate this)
-config.o: config.c redis.h fmacros.h config.h ae.h sds.h dict.h adlist.h \
-  zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
+adlist.o: adlist.c adlist.h zmalloc.h
+config.o: config.c redis.h fmacros.h config.h sds.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
 dict.o: dict.c fmacros.h dict.h zmalloc.h
 endian.o: endian.c
 intset.o: intset.c intset.h zmalloc.h endian.h
-redis.o: redis.c redis.h fmacros.h config.h ae.h sds.h dict.h adlist.h \
-  zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
-t_hash.o: t_hash.c redis.h fmacros.h config.h ae.h sds.h dict.h adlist.h \
-  zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
-t_list.o: t_list.c redis.h fmacros.h config.h ae.h sds.h dict.h adlist.h \
-  zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
-t_set.o: t_set.c redis.h fmacros.h config.h ae.h sds.h dict.h adlist.h \
-  zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
-t_string.o: t_string.c redis.h fmacros.h config.h ae.h sds.h dict.h \
-  adlist.h zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
-t_zset.o: t_zset.c redis.h fmacros.h config.h ae.h sds.h dict.h adlist.h \
-  zmalloc.h anet.h zipmap.h ziplist.h intset.h version.h util.h
+redis.o: redis.c redis.h fmacros.h config.h sds.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
+t_hash.o: t_hash.c redis.h fmacros.h config.h sds.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
+t_list.o: t_list.c redis.h fmacros.h config.h sds.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
+t_set.o: t_set.c redis.h fmacros.h config.h sds.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
+t_string.o: t_string.c redis.h fmacros.h config.h sds.h dict.h \
+  adlist.h zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
+t_zset.o: t_zset.c redis.h fmacros.h config.h sds.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
 ziplist.o: ziplist.c zmalloc.h util.h ziplist.h endian.h
 zipmap.o: zipmap.c zmalloc.h endian.h
 zmalloc.o: zmalloc.c config.h zmalloc.h

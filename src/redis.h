@@ -19,12 +19,10 @@
 #include <pthread.h>
 #include <syslog.h>
 
-#include "ae.h"     /* Event driven programming library */
 #include "sds.h"    /* Dynamic safe strings */
 #include "dict.h"   /* Hash tables */
 #include "adlist.h" /* Linked lists */
 #include "zmalloc.h" /* total memory usage aware version of malloc/free */
-#include "anet.h"   /* Networking the easy way */
 #include "zipmap.h" /* Compact string -> string data structure */
 #include "ziplist.h" /* Compact list data structure */
 #include "intset.h" /* Compact integer set structure */
@@ -403,8 +401,8 @@ struct redisServer {
     struct redisCommand *delCommand, *multiCommand;
     list *slaves, *monitors;
     redisClient *current_client; /* Current client, only used on crash report */
-    char neterr[ANET_ERR_LEN];
-    aeEventLoop *el;
+    // char neterr[1];   // XXX(mgp)
+    // aeEventLoop *el;  // XXX(mgp)
     int cronloops;              /* number of times the cron function run */
     time_t lastsave;                /* Unix time of last save succeeede */
     /* Fields used only for stats */
@@ -688,20 +686,20 @@ redisClient *createClient(int fd);
 void closeTimedoutClients(void);
 void freeClient(redisClient *c);
 void resetClient(redisClient *c);
-void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
+// XXX(mgp) void sendReplyToClient(aeEventLoop *el, int fd, void *privdata, int mask);
 void addReply(redisClient *c, robj *obj);
 void *addDeferredMultiBulkLength(redisClient *c);
 void setDeferredMultiBulkLength(redisClient *c, void *node, long length);
 void addReplySds(redisClient *c, sds s);
 void processInputBuffer(redisClient *c);
-void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask);
-void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask);
-void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
+// XXX(mgp) void acceptTcpHandler(aeEventLoop *el, int fd, void *privdata, int mask);
+// XXX(mgp) void acceptUnixHandler(aeEventLoop *el, int fd, void *privdata, int mask);
+// XXX(mgp) void readQueryFromClient(aeEventLoop *el, int fd, void *privdata, int mask);
 void addReplyBulk(redisClient *c, robj *obj);
 void addReplyBulkCString(redisClient *c, char *s);
 void addReplyBulkCBuffer(redisClient *c, void *p, size_t len);
 void addReplyBulkLongLong(redisClient *c, long long ll);
-void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
+// XXX(mgp) void acceptHandler(aeEventLoop *el, int fd, void *privdata, int mask);
 void addReply(redisClient *c, robj *obj);
 void addReplySds(redisClient *c, sds s);
 void addReplyError(redisClient *c, char *err);
@@ -864,7 +862,7 @@ robj *vmPreviewObject(robj *o);
 int vmSwapOneObjectBlocking(void);
 int vmSwapOneObjectThreaded(void);
 int vmCanSwapOut(void);
-void vmThreadedIOCompletedJob(aeEventLoop *el, int fd, void *privdata, int mask);
+// XXX(mgp) void vmThreadedIOCompletedJob(aeEventLoop *el, int fd, void *privdata, int mask);
 void vmCancelThreadedIOJob(robj *o);
 void lockThreadedIO(void);
 void unlockThreadedIO(void);

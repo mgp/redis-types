@@ -264,6 +264,61 @@ robj *createZsetObject(void) {
     return o;
 }
 
+robj *createZsetZiplistObject(void) {
+    unsigned char *zl = ziplistNew();
+    robj *o = createObject(REDIS_ZSET,zl);
+    o->encoding = REDIS_ENCODING_ZIPLIST;
+    return o;
+}
+
+size_t stringObjectLen(robj *o) {
+    redisAssert(o->type == REDIS_STRING);
+    if (o->encoding == REDIS_ENCODING_RAW) {
+        return sdslen(o->ptr);
+    } else {
+        char buf[32];
+
+        return ll2string(buf,32,(long)o->ptr);
+    }
+}
+
+int getDoubleFromObject(robj *o, double *target) {
+    double value;
+    char *eptr;
+
+    if (o == NULL) {
+        value = 0;
+    } else {
+        redisAssert(o->type == REDIS_STRING);
+        if (o->encoding == REDIS_ENCODING_RAW) {
+            value = strtod(o->ptr, &eptr);
+            if (eptr[0] != '\0' || isnan(value)) return REDIS_ERR;
+        } else if (o->encoding == REDIS_ENCODING_INT) {
+            value = (long)o->ptr;
+        } else {
+            redisPanic("Unknown string encoding");
+        }
+    }
+
+    *target = value;
+    return REDIS_OK;
+}
+
+int getDoubleFromObjectOrReply(redisClient *c, robj *o, double *target, const char *msg) {
+    double value;
+    if (getDoubleFromObject(o, &value) != REDIS_OK) {
+        if (msg != NULL) {
+            addReplyError(c,(char*)msg);
+        } else {
+            addReplyError(c,"value is not a double");
+        }
+        return REDIS_ERR;
+    }
+
+    *target = value;
+    return REDIS_OK;
+}
+
 int getLongLongFromObject(robj *o, long long *target) {
     long long value;
     char *eptr;
@@ -401,6 +456,49 @@ robj *getDecodedObject(robj *o) {
     }
 }
 
+/* Compare two string objects via strcmp() or alike.
+ * Note that the objects may be integer-encoded. In such a case we
+ * use ll2string() to get a string representation of the numbers on the stack
+ * and compare the strings, it's much faster than calling getDecodedObject().
+ *
+ * Important note: if objects are not integer encoded, but binary-safe strings,
+ * sdscmp() from sds.c will apply memcmp() so this function ca be considered
+ * binary safe. */
+int compareStringObjects(robj *a, robj *b) {
+    redisAssert(a->type == REDIS_STRING && b->type == REDIS_STRING);
+    char bufa[128], bufb[128], *astr, *bstr;
+    int bothsds = 1;
+
+    if (a == b) return 0;
+    if (a->encoding != REDIS_ENCODING_RAW) {
+        ll2string(bufa,sizeof(bufa),(long) a->ptr);
+        astr = bufa;
+        bothsds = 0;
+    } else {
+        astr = a->ptr;
+    }
+    if (b->encoding != REDIS_ENCODING_RAW) {
+        ll2string(bufb,sizeof(bufb),(long) b->ptr);
+        bstr = bufb;
+        bothsds = 0;
+    } else {
+        bstr = b->ptr;
+    }
+    return bothsds ? sdscmp(astr,bstr) : strcmp(astr,bstr);
+}
+
+/* Equal string objects return 1 if the two objects are the same from the
+ * point of view of a string comparison, otherwise 0 is returned. Note that
+ * this function is faster then checking for (compareStringObject(a,b) == 0)
+ * because it can perform some more optimization. */
+int equalStringObjects(robj *a, robj *b) {
+    if (a->encoding != REDIS_ENCODING_RAW && b->encoding != REDIS_ENCODING_RAW){
+        return a->ptr == b->ptr;
+    } else {
+        return compareStringObjects(a,b) == 0;
+    }
+}
+
 
 /* XXX(mgp): from networking.c */
 
@@ -464,6 +562,10 @@ void addReplyBulkCString(redisClient *c, char *s) {
 void addReplyBulkLongLong(redisClient *c, long long ll) {
 }
 
+void rewriteClientCommandVector(redisClient *c, int argc, ...) {
+}
+
+
 /* XXX(mgp) from debug.c */
 
 void _redisAssert(char *estr, char *file, int line) {
@@ -471,6 +573,202 @@ void _redisAssert(char *estr, char *file, int line) {
 
 void _redisPanic(char *msg, char *file, int line) {
 }
+
+
+/* XXX(mgp): from db.c */
+
+robj *lookupKey(redisDb *db, robj *key) {
+    dictEntry *de = dictFind(db->dict,key->ptr);
+    if (de) {
+        robj *val = dictGetEntryVal(de);
+
+        /* Update the access time for the aging algorithm.
+         * Don't do it if we have a saving child, as this will trigger
+         * a copy on write madness. */
+        if (server.bgsavechildpid == -1 && server.bgrewritechildpid == -1)
+            val->lru = server.lruclock;
+        return val;
+    } else {
+        return NULL;
+    }
+}
+
+robj *lookupKeyRead(redisDb *db, robj *key) {
+    robj *val;
+
+    expireIfNeeded(db,key);
+    val = lookupKey(db,key);
+    if (val == NULL)
+        server.stat_keyspace_misses++;
+    else
+        server.stat_keyspace_hits++;
+    return val;
+}
+
+robj *lookupKeyWrite(redisDb *db, robj *key) {
+    expireIfNeeded(db,key);
+    return lookupKey(db,key);
+}
+
+robj *lookupKeyReadOrReply(redisClient *c, robj *key, robj *reply) {
+    robj *o = lookupKeyRead(c->db, key);
+    if (!o) addReply(c,reply);
+    return o;
+}
+
+robj *lookupKeyWriteOrReply(redisClient *c, robj *key, robj *reply) {
+    robj *o = lookupKeyWrite(c->db, key);
+    if (!o) addReply(c,reply);
+    return o;
+}
+
+/* Add the key to the DB. It's up to the caller to increment the reference
+ * counte of the value if needed.
+ *
+ * The program is aborted if the key already exists. */
+void dbAdd(redisDb *db, robj *key, robj *val) {
+    sds copy = sdsdup(key->ptr);
+    int retval = dictAdd(db->dict, copy, val);
+    redisAssert(retval == REDIS_OK);
+}
+
+/* High level Set operation. This function can be used in order to set
+ * a key, whatever it was existing or not, to a new object.
+ *
+ * 1) The ref count of the value object is incremented.
+ * 2) clients WATCHing for the destination key notified.
+ * 3) The expire time of the key is reset (the key is made persistent). */
+void setKey(redisDb *db, robj *key, robj *val) {
+    if (lookupKeyWrite(db,key) == NULL) {
+        dbAdd(db,key,val);
+    } else {
+        dbOverwrite(db,key,val);
+    }
+    incrRefCount(val);
+    removeExpire(db,key);
+    signalModifiedKey(db,key);
+}
+
+/* Overwrite an existing key with a new value. Incrementing the reference
+ * count of the new value is up to the caller.
+ * This function does not modify the expire time of the existing key.
+ *
+ * The program is aborted if the key was not already present. */
+void dbOverwrite(redisDb *db, robj *key, robj *val) {
+    struct dictEntry *de = dictFind(db->dict,key->ptr);
+    
+    redisAssert(de != NULL);
+    dictReplace(db->dict, key->ptr, val);
+}
+
+/* Delete a key, value, and associated expiration entry if any, from the DB */
+int dbDelete(redisDb *db, robj *key) {
+    /* Deleting an entry from the expires dict will not free the sds of
+     * the key, because it is shared with the main dictionary. */
+    if (dictSize(db->expires) > 0) dictDelete(db->expires,key->ptr);
+    return dictDelete(db->dict,key->ptr) == DICT_OK;
+}
+
+void signalModifiedKey(redisDb *db, robj *key) {
+    touchWatchedKey(db,key);
+}
+
+int removeExpire(redisDb *db, robj *key) {
+    /* An expire may only be removed if there is a corresponding entry in the
+     * main dict. Otherwise, the key will never be freed. */
+    redisAssert(dictFind(db->dict,key->ptr) != NULL);
+    return dictDelete(db->expires,key->ptr) == DICT_OK;
+}
+
+void setExpire(redisDb *db, robj *key, time_t when) {
+    dictEntry *de;
+
+    /* Reuse the sds from the main dict in the expire dict */
+    de = dictFind(db->dict,key->ptr);
+    redisAssert(de != NULL);
+    dictReplace(db->expires,dictGetEntryKey(de),(void*)when);
+}
+
+/* Return the expire time of the specified key, or -1 if no expire
+ * is associated with this key (i.e. the key is non volatile) */
+time_t getExpire(redisDb *db, robj *key) {
+    dictEntry *de;
+
+    /* No expire? return ASAP */
+    if (dictSize(db->expires) == 0 ||
+       (de = dictFind(db->expires,key->ptr)) == NULL) return -1;
+
+    /* The entry was found in the expire dict, this means it should also
+     * be present in the main dict (safety check). */
+    redisAssert(dictFind(db->dict,key->ptr) != NULL);
+    return (time_t) dictGetEntryVal(de);
+}
+
+/* Propagate expires into slaves and the AOF file.
+ * When a key expires in the master, a DEL operation for this key is sent
+ * to all the slaves and the AOF file if enabled.
+ *
+ * This way the key expiry is centralized in one place, and since both
+ * AOF and the master->slave link guarantee operation ordering, everything
+ * will be consistent even if we allow write operations against expiring
+ * keys. */
+void propagateExpire(redisDb *db, robj *key) {
+  // XXX(mgp)
+}
+
+int expireIfNeeded(redisDb *db, robj *key) {
+    time_t when = getExpire(db,key);
+
+    if (when < 0) return 0; /* No expire for this key */
+
+    /* Don't expire anything while loading. It will be done later. */
+    if (server.loading) return 0;
+
+    /* If we are running in the context of a slave, return ASAP:
+     * the slave key expiration is controlled by the master that will
+     * send us synthesized DEL operations for expired keys.
+     *
+     * Still we try to return the right information to the caller, 
+     * that is, 0 if we think the key should be still valid, 1 if
+     * we think the key is expired at this time. */
+    if (server.masterhost != NULL) {
+        return time(NULL) > when;
+    }
+
+    /* Return when this key has not expired */
+    if (time(NULL) <= when) return 0;
+
+    /* Delete the key */
+    server.stat_expiredkeys++;
+    propagateExpire(db,key);
+    return dbDelete(db,key);
+}
+
+/* XXX(mgp) from multi.c */
+
+/* "Touch" a key, so that if this key is being WATCHed by some client the
+ * next EXEC will fail. */
+void touchWatchedKey(redisDb *db, robj *key) {
+    list *clients;
+    listIter li;
+    listNode *ln;
+
+    if (dictSize(db->watched_keys) == 0) return;
+    clients = dictFetchValue(db->watched_keys, key);
+    if (!clients) return;
+
+    /* Mark all the clients watching this key as REDIS_DIRTY_CAS */
+    /* Check if we are already watching for this key */
+    listRewind(clients,&li);
+    while((ln = listNext(&li))) {
+        redisClient *c = listNodeValue(ln);
+
+        c->flags |= REDIS_DIRTY_CAS;
+    }
+}
+
+
+
 
 
 
