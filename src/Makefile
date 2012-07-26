@@ -48,19 +48,19 @@ adlist.o: adlist.c adlist.h zmalloc.h
 dict.o: dict.c dict.h zmalloc.h
 endian.o: endian.c
 intset.o: intset.c intset.h zmalloc.h endian.h
-redis.o: redis.c redis.h sds.h dict.h adlist.h \
-  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
-t_hash.o: t_hash.c redis.h sds.h dict.h adlist.h \
-  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
-t_list.o: t_list.c redis.h sds.h dict.h adlist.h \
-  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
-t_set.o: t_set.c redis.h sds.h dict.h adlist.h \
-  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
-t_string.o: t_string.c redis.h sds.h dict.h \
-  adlist.h zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
-t_zset.o: t_zset.c redis.h sds.h dict.h adlist.h \
-  zmalloc.h zipmap.h ziplist.h intset.h version.h util.h
-ziplist.o: ziplist.c zmalloc.h util.h ziplist.h endian.h
+redis.o: redis.c redis.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h
+t_hash.o: t_hash.c redis.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h
+t_list.o: t_list.c redis.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h
+t_set.o: t_set.c redis.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h
+t_string.o: t_string.c redis.h dict.h \
+  adlist.h zmalloc.h zipmap.h ziplist.h intset.h version.h
+t_zset.o: t_zset.c redis.h dict.h adlist.h \
+  zmalloc.h zipmap.h ziplist.h intset.h version.h
+ziplist.o: ziplist.c zmalloc.h ziplist.h endian.h
 zipmap.o: zipmap.c zmalloc.h endian.h
 zmalloc.o: zmalloc.c zmalloc.h
 

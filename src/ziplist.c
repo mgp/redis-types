@@ -67,7 +67,6 @@
 #include <assert.h>
 #include <limits.h>
 #include "zmalloc.h"
-#include "util.h"
 #include "ziplist.h"
 #include "endian.h"
 

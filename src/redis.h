@@ -16,7 +16,6 @@
 #include <pthread.h>
 #include <syslog.h>
 
-#include "sds.h"    /* Dynamic safe strings */
 #include "dict.h"   /* Hash tables */
 #include "adlist.h" /* Linked lists */
 #include "zmalloc.h" /* total memory usage aware version of malloc/free */
@@ -24,6 +23,36 @@
 #include "ziplist.h" /* Compact list data structure */
 #include "intset.h" /* Compact integer set structure */
 #include "version.h"
+
+
+
+/* XXX(mgp) from sds.h */
+
+#define SDS_MAX_PREALLOC (1024*1024)
+
+#include <sys/types.h>
+
+typedef char *sds;
+
+struct sdshdr {
+    int len;
+    int free;
+    char buf[];
+};
+
+static inline size_t sdslen(const sds s) {
+    struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
+    return sh->len;
+}
+
+static inline size_t sdsavail(const sds s) {
+    struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
+    return sh->free;
+}
+
+
+
+
 
 /* Error codes */
 #define REDIS_OK                0
@@ -1092,5 +1121,7 @@ sds sdsdup(const sds s);
 sds sdsgrowzero(sds s, size_t len);
 sds sdsempty();
 sds sdscatlen(sds s, void *t, size_t len);
+size_t sdslen(const sds s);
+size_t sdsavail(sds s);
 
 #endif
