@@ -22,7 +22,6 @@
 #include "zipmap.h" /* Compact string -> string data structure */
 #include "ziplist.h" /* Compact list data structure */
 #include "intset.h" /* Compact integer set structure */
-#include "version.h"
 
 
 
