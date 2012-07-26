@@ -156,6 +156,61 @@ int string2ll(char *s, size_t slen, long long *value) {
     return 1;
 }
 
+/* Convert a string into a long. Returns 1 if the string could be parsed into a
+ * (non-overflowing) long, 0 otherwise. The value will be set to the parsed
+ * value when appropriate. */
+int string2l(char *s, size_t slen, long *lval) {
+    long long llval;
+
+    if (!string2ll(s,slen,&llval))
+        return 0;
+
+    if (llval < LONG_MIN || llval > LONG_MAX)
+        return 0;
+
+    *lval = (long)llval;
+    return 1;
+}
+
+/* Convert a double to a string representation. Returns the number of bytes
+ * required. The representation should always be parsable by stdtod(3). */
+int d2string(char *buf, size_t len, double value) {
+    if (isnan(value)) {
+        len = snprintf(buf,len,"nan");
+    } else if (isinf(value)) {
+        if (value < 0)
+            len = snprintf(buf,len,"-inf");
+        else
+            len = snprintf(buf,len,"inf");
+    } else if (value == 0) {
+        /* See: http://en.wikipedia.org/wiki/Signed_zero, "Comparisons". */
+        if (1.0/value < 0)
+            len = snprintf(buf,len,"-0");
+        else
+            len = snprintf(buf,len,"0");
+    } else {
+#if (DBL_MANT_DIG >= 52) && (LLONG_MAX == 0x7fffffffffffffffLL)
+        /* Check if the float is in a safe range to be casted into a
+         * long long. We are assuming that long long is 64 bit here.
+         * Also we are assuming that there are no implementations around where
+         * double has precision < 52 bit.
+         *
+         * Under this assumptions we test if a double is inside an interval
+         * where casting to long long is safe. Then using two castings we
+         * make sure the decimal part is zero. If all this is true we use
+         * integer printing function that is much faster. */
+        double min = -4503599627370495; /* (2^52)-1 */
+        double max = 4503599627370496; /* -(2^52) */
+        if (value > min && value < max && value == ((double)((long long)value)))
+            len = ll2string(buf,len,(long long)value);
+        else
+#endif
+            len = snprintf(buf,len,"%.17g",value);
+    }
+
+    return len;
+}
+
 /* XXX(mgp): from object.c */
 
 void incrRefCount(robj *o) {
@@ -766,6 +821,136 @@ void touchWatchedKey(redisDb *db, robj *key) {
         c->flags |= REDIS_DIRTY_CAS;
     }
 }
+
+/* XXX(mgp) from sds.c */
+
+sds sdsnewlen(const void *init, size_t initlen) {
+    struct sdshdr *sh;
+
+    sh = zmalloc(sizeof(struct sdshdr)+initlen+1);
+#ifdef SDS_ABORT_ON_OOM
+    if (sh == NULL) sdsOomAbort();
+#else
+    if (sh == NULL) return NULL;
+#endif
+    sh->len = initlen;
+    sh->free = 0;
+    if (initlen) {
+        if (init) memcpy(sh->buf, init, initlen);
+        else memset(sh->buf,0,initlen);
+    }
+    sh->buf[initlen] = '\0';
+    return (char*)sh->buf;
+}
+
+sds sdsfromlonglong(long long value) {
+    char buf[32], *p;
+    unsigned long long v;
+
+    v = (value < 0) ? -value : value;
+    p = buf+31; /* point to the last character */
+    do {
+        *p-- = '0'+(v%10);
+        v /= 10;
+    } while(v);
+    if (value < 0) *p-- = '-';
+    p++;
+    return sdsnewlen(p,32-(p-buf));
+}
+
+void sdsfree(sds s) {
+    if (s == NULL) return;
+    zfree(s-sizeof(struct sdshdr));
+}
+
+int sdscmp(sds s1, sds s2) {
+    size_t l1, l2, minlen;
+    int cmp;
+
+    l1 = sdslen(s1);
+    l2 = sdslen(s2);
+    minlen = (l1 < l2) ? l1 : l2;
+    cmp = memcmp(s1,s2,minlen);
+    if (cmp == 0) return l1-l2;
+    return cmp;
+}
+
+sds sdsdup(const sds s) {
+    return sdsnewlen(s, sdslen(s));
+}
+
+static sds sdsMakeRoomFor(sds s, size_t addlen) {
+    struct sdshdr *sh, *newsh;
+    size_t free = sdsavail(s);
+    size_t len, newlen;
+
+    if (free >= addlen) return s;
+    len = sdslen(s);
+    sh = (void*) (s-(sizeof(struct sdshdr)));
+    newlen = (len+addlen);
+    if (newlen < SDS_MAX_PREALLOC)
+        newlen *= 2;
+    else
+        newlen += SDS_MAX_PREALLOC;
+    newsh = zrealloc(sh, sizeof(struct sdshdr)+newlen+1);
+#ifdef SDS_ABORT_ON_OOM
+    if (newsh == NULL) sdsOomAbort();
+#else
+    if (newsh == NULL) return NULL;
+#endif
+
+    newsh->free = newlen - len;
+    return newsh->buf;
+}
+
+/* Grow the sds to have the specified length. Bytes that were not part of
+ * the original length of the sds will be set to zero. */
+sds sdsgrowzero(sds s, size_t len) {
+    struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
+    size_t totlen, curlen = sh->len;
+
+    if (len <= curlen) return s;
+    s = sdsMakeRoomFor(s,len-curlen);
+    if (s == NULL) return NULL;
+
+    /* Make sure added region doesn't contain garbage */
+    sh = (void*)(s-(sizeof(struct sdshdr)));
+    memset(s+curlen,0,(len-curlen+1)); /* also set trailing \0 byte */
+    totlen = sh->len+sh->free;
+    sh->len = len;
+    sh->free = totlen-sh->len;
+    return s;
+}
+
+sds sdsempty(void) {
+    return sdsnewlen("",0);
+}
+
+sds sdscatlen(sds s, void *t, size_t len) {
+    struct sdshdr *sh;
+    size_t curlen = sdslen(s);
+
+    s = sdsMakeRoomFor(s,len);
+    if (s == NULL) return NULL;
+    sh = (void*) (s-(sizeof(struct sdshdr)));
+    memcpy(s+curlen, t, len);
+    sh->len = curlen+len;
+    sh->free = sh->free-len;
+    s[curlen+len] = '\0';
+    return s;
+}
+
+
+
+
+
+
+
+
+
+
+
+
 
 
 

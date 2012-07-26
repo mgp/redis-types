@@ -1075,4 +1075,22 @@ void *realloc(void *ptr, size_t size) __attribute__ ((deprecated));
 
 void redisLogObjectDebugInfo(robj *o);
 
+/* XXX(mgp) from util.h */
+
+int ll2string(char *s, size_t len, long long value);
+int string2ll(char *s, size_t slen, long long *value);
+int string2l(char *s, size_t slen, long *value);
+int d2string(char *buf, size_t len, double value);
+
+/* XXX(mgp) from sds.h */
+
+sds sdsnewlen(const void *init, size_t initlen);
+sds sdsfromlonglong(long long value);
+void sdsfree(sds s);
+int sdscmp(sds s1, sds s2);
+sds sdsdup(const sds s);
+sds sdsgrowzero(sds s, size_t len);
+sds sdsempty();
+sds sdscatlen(sds s, void *t, size_t len);
+
 #endif
