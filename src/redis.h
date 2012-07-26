@@ -1,9 +1,6 @@
 #ifndef __REDIS_H
 #define __REDIS_H
 
-#include "fmacros.h"
-#include "config.h"
-
 #if defined(__sun)
 #include "solarisfixes.h"
 #endif
