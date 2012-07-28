@@ -238,7 +238,7 @@ robj *createObject(int type, void *ptr) {
     /* The following is only needed if VM is active, but since the conditional
      * is probably more costly than initializing the field it's better to
      * have every field properly initialized anyway. */
-    o->storage = REDIS_VM_MEMORY;
+    // o->storage = REDIS_VM_MEMORY;  // XXX(mgp)
     return o;
 }
 
@@ -1409,9 +1409,6 @@ static void *getMcontextEip(ucontext_t *uc) {
 #else
     return NULL;
 #endif
-}
-
-void bugReportStart(void) {
 }
 
 static void sigsegvHandler(int sig, siginfo_t *info, void *secret) {
