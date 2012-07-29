@@ -261,7 +261,6 @@ void listTypeConvert(robj *subject, int enc) {
 void pushGenericCommand(redisClient *c, int where) {
     int j, addlen = 0, pushed = 0;
     robj *lobj = lookupKeyWrite(c->db,c->argv[1]);
-    int may_have_waiting_clients = (lobj == NULL);
 
     if (lobj && lobj->type != REDIS_LIST) {
         addReply(c,shared.wrongtypeerr);
@@ -270,14 +269,6 @@ void pushGenericCommand(redisClient *c, int where) {
 
     for (j = 2; j < c->argc; j++) {
         c->argv[j] = tryObjectEncoding(c->argv[j]);
-        if (may_have_waiting_clients) {
-            if (handleClientsWaitingListPush(c,c->argv[1],c->argv[j])) {
-                addlen++;
-                continue;
-            } else {
-                may_have_waiting_clients = 0;
-            }
-        }
         if (!lobj) {
             lobj = createZiplistObject();
             dbAdd(c->db,c->argv[1],lobj);
@@ -648,35 +639,34 @@ void lremCommand(redisClient *c) {
 void rpoplpushHandlePush(redisClient *origclient, redisClient *c, robj *dstkey, robj *dstobj, robj *value) {
     robj *aux;
 
-    if (!handleClientsWaitingListPush(origclient,dstkey,value)) {
-        /* Create the list if the key does not exist */
-        if (!dstobj) {
-            dstobj = createZiplistObject();
-            dbAdd(c->db,dstkey,dstobj);
-        } else {
-            signalModifiedKey(c->db,dstkey);
-        }
-        listTypePush(dstobj,value,REDIS_HEAD);
-        /* If we are pushing as a result of LPUSH against a key
-         * watched by BRPOPLPUSH, we need to rewrite the command vector
-         * as an LPUSH.
-         *
-         * If this is called directly by RPOPLPUSH (either directly
-         * or via a BRPOPLPUSH where the popped list exists)
-         * we should replicate the RPOPLPUSH command itself. */
-        if (c != origclient) {
-            aux = createStringObject("LPUSH",5);
-            rewriteClientCommandVector(origclient,3,aux,dstkey,value);
-            decrRefCount(aux);
-        } else {
-            /* Make sure to always use RPOPLPUSH in the replication / AOF,
-             * even if the original command was BRPOPLPUSH. */
-            aux = createStringObject("RPOPLPUSH",9);
-            rewriteClientCommandVector(origclient,3,aux,c->argv[1],c->argv[2]);
-            decrRefCount(aux);
-        }
-        server.dirty++;
+    /* Create the list if the key does not exist */
+    if (!dstobj) {
+        dstobj = createZiplistObject();
+        dbAdd(c->db,dstkey,dstobj);
+    } else {
+        signalModifiedKey(c->db,dstkey);
     }
+    listTypePush(dstobj,value,REDIS_HEAD);
+    /* If we are pushing as a result of LPUSH against a key
+     * watched by BRPOPLPUSH, we need to rewrite the command vector
+     * as an LPUSH.
+     *
+     * If this is called directly by RPOPLPUSH (either directly
+     * or via a BRPOPLPUSH where the popped list exists)
+     * we should replicate the RPOPLPUSH command itself. */
+    // TODO(mgp)
+    if (c != origclient) {
+        aux = createStringObject("LPUSH",5);
+        rewriteClientCommandVector(origclient,3,aux,dstkey,value);
+        decrRefCount(aux);
+    } else {
+        /* Make sure to always use RPOPLPUSH in the replication / AOF,
+         * even if the original command was BRPOPLPUSH. */
+        aux = createStringObject("RPOPLPUSH",9);
+        rewriteClientCommandVector(origclient,3,aux,c->argv[1],c->argv[2]);
+        decrRefCount(aux);
+    }
+    server.dirty++;
 
     /* Always send the pushed value to the client. */
     addReplyBulk(c,value);
@@ -711,291 +701,3 @@ void rpoplpushCommand(redisClient *c) {
     }
 }
 
-/*-----------------------------------------------------------------------------
- * Blocking POP operations
- *----------------------------------------------------------------------------*/
-
-/* Currently Redis blocking operations support is limited to list POP ops,
- * so the current implementation is not fully generic, but it is also not
- * completely specific so it will not require a rewrite to support new
- * kind of blocking operations in the future.
- *
- * Still it's important to note that list blocking operations can be already
- * used as a notification mechanism in order to implement other blocking
- * operations at application level, so there must be a very strong evidence
- * of usefulness and generality before new blocking operations are implemented.
- *
- * This is how the current blocking POP works, we use BLPOP as example:
- * - If the user calls BLPOP and the key exists and contains a non empty list
- *   then LPOP is called instead. So BLPOP is semantically the same as LPOP
- *   if there is not to block.
- * - If instead BLPOP is called and the key does not exists or the list is
- *   empty we need to block. In order to do so we remove the notification for
- *   new data to read in the client socket (so that we'll not serve new
- *   requests if the blocking request is not served). Also we put the client
- *   in a dictionary (db->blocking_keys) mapping keys to a list of clients
- *   blocking for this keys.
- * - If a PUSH operation against a key with blocked clients waiting is
- *   performed, we serve the first in the list: basically instead to push
- *   the new element inside the list we return it to the (first / oldest)
- *   blocking client, unblock the client, and remove it form the list.
- *
- * The above comment and the source code should be enough in order to understand
- * the implementation and modify / fix it later.
- */
-
-/* Set a client in blocking mode for the specified key, with the specified
- * timeout */
-void blockForKeys(redisClient *c, robj **keys, int numkeys, time_t timeout, robj *target) {
-    dictEntry *de;
-    list *l;
-    int j;
-
-    c->bpop.keys = zmalloc(sizeof(robj*)*numkeys);
-    c->bpop.count = numkeys;
-    c->bpop.timeout = timeout;
-    c->bpop.target = target;
-
-    if (target != NULL) {
-        incrRefCount(target);
-    }
-
-    for (j = 0; j < numkeys; j++) {
-        /* Add the key in the client structure, to map clients -> keys */
-        c->bpop.keys[j] = keys[j];
-        incrRefCount(keys[j]);
-
-        /* And in the other "side", to map keys -> clients */
-        de = dictFind(c->db->blocking_keys,keys[j]);
-        if (de == NULL) {
-            int retval;
-
-            /* For every key we take a list of clients blocked for it */
-            l = listCreate();
-            retval = dictAdd(c->db->blocking_keys,keys[j],l);
-            incrRefCount(keys[j]);
-            redisAssert(retval == DICT_OK);
-        } else {
-            l = dictGetEntryVal(de);
-        }
-        listAddNodeTail(l,c);
-    }
-    /* Mark the client as a blocked client */
-    c->flags |= REDIS_BLOCKED;
-    server.bpop_blocked_clients++;
-}
-
-/* Unblock a client that's waiting in a blocking operation such as BLPOP */
-void unblockClientWaitingData(redisClient *c) {
-    dictEntry *de;
-    list *l;
-    int j;
-
-    redisAssert(c->bpop.keys != NULL);
-    /* The client may wait for multiple keys, so unblock it for every key. */
-    for (j = 0; j < c->bpop.count; j++) {
-        /* Remove this client from the list of clients waiting for this key. */
-        de = dictFind(c->db->blocking_keys,c->bpop.keys[j]);
-        redisAssert(de != NULL);
-        l = dictGetEntryVal(de);
-        listDelNode(l,listSearchKey(l,c));
-        /* If the list is empty we need to remove it to avoid wasting memory */
-        if (listLength(l) == 0)
-            dictDelete(c->db->blocking_keys,c->bpop.keys[j]);
-        decrRefCount(c->bpop.keys[j]);
-    }
-
-    /* Cleanup the client structure */
-    zfree(c->bpop.keys);
-    c->bpop.keys = NULL;
-    if (c->bpop.target) decrRefCount(c->bpop.target);
-    c->bpop.target = NULL;
-    c->flags &= ~REDIS_BLOCKED;
-    c->flags |= REDIS_UNBLOCKED;
-    server.bpop_blocked_clients--;
-    listAddNodeTail(server.unblocked_clients,c);
-}
-
-/* This should be called from any function PUSHing into lists.
- * 'c' is the "pushing client", 'key' is the key it is pushing data against,
- * 'ele' is the element pushed.
- *
- * If the function returns 0 there was no client waiting for a list push
- * against this key.
- *
- * If the function returns 1 there was a client waiting for a list push
- * against this key, the element was passed to this client thus it's not
- * needed to actually add it to the list and the caller should return asap. */
-int handleClientsWaitingListPush(redisClient *c, robj *key, robj *ele) {
-    struct dictEntry *de;
-    redisClient *receiver;
-    int numclients;
-    list *clients;
-    listNode *ln;
-    robj *dstkey, *dstobj;
-
-    de = dictFind(c->db->blocking_keys,key);
-    if (de == NULL) return 0;
-    clients = dictGetEntryVal(de);
-    numclients = listLength(clients);
-
-    /* Try to handle the push as long as there are clients waiting for a push.
-     * Note that "numclients" is used because the list of clients waiting for a
-     * push on "key" is deleted by unblockClient() when empty.
-     *
-     * This loop will have more than 1 iteration when there is a BRPOPLPUSH
-     * that cannot push the target list because it does not contain a list. If
-     * this happens, it simply tries the next client waiting for a push. */
-    while (numclients--) {
-        ln = listFirst(clients);
-        redisAssert(ln != NULL);
-        receiver = ln->value;
-        dstkey = receiver->bpop.target;
-
-        /* Protect receiver->bpop.target, that will be freed by
-         * the next unblockClientWaitingData() call. */
-        if (dstkey) incrRefCount(dstkey);
-        /* This should remove the first element of the "clients" list. */
-        unblockClientWaitingData(receiver);
-
-        if (dstkey == NULL) {
-            /* BRPOP/BLPOP */
-            addReplyMultiBulkLen(receiver,2);
-            addReplyBulk(receiver,key);
-            addReplyBulk(receiver,ele);
-            return 1; /* Serve just the first client as in B[RL]POP semantics */
-        } else {
-            /* BRPOPLPUSH, note that receiver->db is always equal to c->db. */
-            dstobj = lookupKeyWrite(receiver->db,dstkey);
-            if (!(dstobj && checkType(receiver,dstobj,REDIS_LIST))) {
-                rpoplpushHandlePush(c,receiver,dstkey,dstobj,ele);
-                decrRefCount(dstkey);
-                return 1;
-            }
-            decrRefCount(dstkey);
-        }
-    }
-
-    return 0;
-}
-
-int getTimeoutFromObjectOrReply(redisClient *c, robj *object, time_t *timeout) {
-    long tval;
-
-    if (getLongFromObjectOrReply(c,object,&tval,
-        "timeout is not an integer or out of range") != REDIS_OK)
-        return REDIS_ERR;
-
-    if (tval < 0) {
-        addReplyError(c,"timeout is negative");
-        return REDIS_ERR;
-    }
-
-    if (tval > 0) tval += time(NULL);
-    *timeout = tval;
-
-    return REDIS_OK;
-}
-
-/* Blocking RPOP/LPOP */
-void blockingPopGenericCommand(redisClient *c, int where) {
-    robj *o;
-    time_t timeout;
-    int j;
-
-    if (getTimeoutFromObjectOrReply(c,c->argv[c->argc-1],&timeout) != REDIS_OK)
-        return;
-
-    for (j = 1; j < c->argc-1; j++) {
-        o = lookupKeyWrite(c->db,c->argv[j]);
-        if (o != NULL) {
-            if (o->type != REDIS_LIST) {
-                addReply(c,shared.wrongtypeerr);
-                return;
-            } else {
-                if (listTypeLength(o) != 0) {
-                    /* If the list contains elements fall back to the usual
-                     * non-blocking POP operation */
-                    struct redisCommand *orig_cmd;
-                    robj *argv[2], **orig_argv;
-                    int orig_argc;
-
-                    /* We need to alter the command arguments before to call
-                     * popGenericCommand() as the command takes a single key. */
-                    orig_argv = c->argv;
-                    orig_argc = c->argc;
-                    orig_cmd = c->cmd;
-                    argv[1] = c->argv[j];
-                    c->argv = argv;
-                    c->argc = 2;
-
-                    /* Also the return value is different, we need to output
-                     * the multi bulk reply header and the key name. The
-                     * "real" command will add the last element (the value)
-                     * for us. If this souds like an hack to you it's just
-                     * because it is... */
-                    addReplyMultiBulkLen(c,2);
-                    addReplyBulk(c,argv[1]);
-
-                    popGenericCommand(c,where);
-
-                    /* Fix the client structure with the original stuff */
-                    c->argv = orig_argv;
-                    c->argc = orig_argc;
-                    c->cmd = orig_cmd;
-
-                    return;
-                }
-            }
-        }
-    }
-
-    /* If we are inside a MULTI/EXEC and the list is empty the only thing
-     * we can do is treating it as a timeout (even with timeout 0). */
-    if (c->flags & REDIS_MULTI) {
-        addReply(c,shared.nullmultibulk);
-        return;
-    }
-
-    /* If the list is empty or the key does not exists we must block */
-    blockForKeys(c, c->argv + 1, c->argc - 2, timeout, NULL);
-}
-
-void blpopCommand(redisClient *c) {
-    blockingPopGenericCommand(c,REDIS_HEAD);
-}
-
-void brpopCommand(redisClient *c) {
-    blockingPopGenericCommand(c,REDIS_TAIL);
-}
-
-void brpoplpushCommand(redisClient *c) {
-    time_t timeout;
-
-    if (getTimeoutFromObjectOrReply(c,c->argv[3],&timeout) != REDIS_OK)
-        return;
-
-    robj *key = lookupKeyWrite(c->db, c->argv[1]);
-
-    if (key == NULL) {
-        if (c->flags & REDIS_MULTI) {
-
-            /* Blocking against an empty list in a multi state
-             * returns immediately. */
-            addReply(c, shared.nullbulk);
-        } else {
-            /* The list is empty and the client blocks. */
-            blockForKeys(c, c->argv + 1, 1, timeout, c->argv[2]);
-        }
-    } else {
-        if (key->type != REDIS_LIST) {
-            addReply(c, shared.wrongtypeerr);
-        } else {
-
-            /* The list exists and has elements, so
-             * the regular rpoplpushCommand is executed. */
-            redisAssert(listTypeLength(key) > 0);
-            rpoplpushCommand(c);
-        }
-    }
-}
