@@ -18,18 +18,18 @@ robj *dbRandomKey(redisDb *db);
 int dbDelete(redisDb *db, robj *key);
 long long emptyDb();
 
+void dbsizeCommand(redisClient *c);
 void delCommand(redisClient *c);
 void existsCommand(redisClient *c);
-void randomkeyCommand(redisClient *c);
-void keysCommand(redisClient *c);
-void dbsizeCommand(redisClient *c);
-void typeCommand(redisClient *c);
-void renameCommand(redisClient *c);
-void renamenxCommand(redisClient *c);
 void expireCommand(redisClient *c);
 void expireatCommand(redisClient *c);
-void ttlCommand(redisClient *c);
+void keysCommand(redisClient *c);
 void persistCommand(redisClient *c);
+void randomkeyCommand(redisClient *c);
+void renameCommand(redisClient *c);
+void renamenxCommand(redisClient *c);
+void ttlCommand(redisClient *c);
+void typeCommand(redisClient *c);
 
 #endif
 
