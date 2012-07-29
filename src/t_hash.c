@@ -1,6 +1,8 @@
-#include "redis.h"
+#include "t_hash.h"
 
 #include <math.h>
+
+#include "redis.h"
 
 /*-----------------------------------------------------------------------------
  * Hash type API

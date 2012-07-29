@@ -1,6 +1,8 @@
-#include "redis.h"
+#include "t_zset.h"
 
 #include <math.h>
+
+#include "redis.h"
 
 /*-----------------------------------------------------------------------------
  * Sorted set API
