@@ -397,39 +397,6 @@ void unblockClientWaitingData(redisClient *c);
 int handleClientsWaitingListPush(redisClient *c, robj *key, robj *ele);
 void popGenericCommand(redisClient *c, int where);
 
-/* Redis object implementation */
-void decrRefCount(void *o);
-void incrRefCount(robj *o);
-void freeStringObject(robj *o);
-void freeListObject(robj *o);
-void freeSetObject(robj *o);
-void freeZsetObject(robj *o);
-void freeHashObject(robj *o);
-robj *createObject(int type, void *ptr);
-robj *createStringObject(char *ptr, size_t len);
-robj *dupStringObject(robj *o);
-int isObjectRepresentableAsLongLong(robj *o, long long *llongval);
-robj *tryObjectEncoding(robj *o);
-robj *getDecodedObject(robj *o);
-size_t stringObjectLen(robj *o);
-robj *createStringObjectFromLongLong(long long value);
-robj *createListObject(void);
-robj *createZiplistObject(void);
-robj *createSetObject(void);
-robj *createIntsetObject(void);
-robj *createHashObject(void);
-robj *createZsetObject(void);
-robj *createZsetZiplistObject(void);
-int getLongFromObjectOrReply(redisClient *c, robj *o, long *target, const char *msg);
-int checkType(redisClient *c, robj *o, int type);
-int getLongLongFromObjectOrReply(redisClient *c, robj *o, long long *target, const char *msg);
-int getDoubleFromObjectOrReply(redisClient *c, robj *o, double *target, const char *msg);
-int getLongLongFromObject(robj *o, long long *target);
-char *strEncoding(int encoding);
-int compareStringObjects(robj *a, robj *b);
-int equalStringObjects(robj *a, robj *b);
-unsigned long estimateObjectIdleTime(robj *o);
-
 /* Synchronous I/O with timeout */
 int syncWrite(int fd, char *ptr, ssize_t size, int timeout);
 int syncRead(int fd, char *ptr, ssize_t size, int timeout);
@@ -494,28 +461,6 @@ int hashTypeNext(hashTypeIterator *hi);
 int hashTypeCurrent(hashTypeIterator *hi, int what, robj **objval, unsigned char **v, unsigned int *vlen);
 robj *hashTypeCurrentObject(hashTypeIterator *hi, int what);
 robj *hashTypeLookupWriteOrCreate(redisClient *c, robj *key);
-
-/* db.c -- Keyspace access API */
-int removeExpire(redisDb *db, robj *key);
-void propagateExpire(redisDb *db, robj *key);
-int expireIfNeeded(redisDb *db, robj *key);
-time_t getExpire(redisDb *db, robj *key);
-void setExpire(redisDb *db, robj *key, time_t when);
-robj *lookupKey(redisDb *db, robj *key);
-robj *lookupKeyRead(redisDb *db, robj *key);
-robj *lookupKeyWrite(redisDb *db, robj *key);
-robj *lookupKeyReadOrReply(redisClient *c, robj *key, robj *reply);
-robj *lookupKeyWriteOrReply(redisClient *c, robj *key, robj *reply);
-void dbAdd(redisDb *db, robj *key, robj *val);
-void dbOverwrite(redisDb *db, robj *key, robj *val);
-void setKey(redisDb *db, robj *key, robj *val);
-int dbExists(redisDb *db, robj *key);
-robj *dbRandomKey(redisDb *db);
-int dbDelete(redisDb *db, robj *key);
-long long emptyDb();
-int selectDb(redisClient *c, int id);
-void signalModifiedKey(redisDb *db, robj *key);
-void signalFlushedDb(int dbid);
 
 /* Git SHA1 */
 char *redisGitSHA1(void);
