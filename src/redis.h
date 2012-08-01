@@ -24,35 +24,6 @@
 #include "intset.h" /* Compact integer set structure */
 
 
-
-/* XXX(mgp) from sds.h */
-
-#define SDS_MAX_PREALLOC (1024*1024)
-
-#include <sys/types.h>
-
-typedef char *sds;
-
-struct sdshdr {
-    int len;
-    int free;
-    char buf[];
-};
-
-static inline size_t sdslen(const sds s) {
-    struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
-    return sh->len;
-}
-
-static inline size_t sdsavail(const sds s) {
-    struct sdshdr *sh = (void*)(s-(sizeof(struct sdshdr)));
-    return sh->free;
-}
-
-
-
-
-
 /* Error codes */
 #define REDIS_OK                0
 #define REDIS_ERR               -1
@@ -380,114 +351,18 @@ void addReplyErrorFormat(redisClient *c, const char *fmt, ...);
 void addReplyStatusFormat(redisClient *c, const char *fmt, ...);
 #endif
 
-/* List data type */
-void listTypeTryConversion(robj *subject, robj *value);
-void listTypePush(robj *subject, robj *value, int where);
-robj *listTypePop(robj *subject, int where);
-unsigned long listTypeLength(robj *subject);
-listTypeIterator *listTypeInitIterator(robj *subject, int index, unsigned char direction);
-void listTypeReleaseIterator(listTypeIterator *li);
-int listTypeNext(listTypeIterator *li, listTypeEntry *entry);
-robj *listTypeGet(listTypeEntry *entry);
-void listTypeInsert(listTypeEntry *entry, robj *value, int where);
-int listTypeEqual(listTypeEntry *entry, robj *o);
-void listTypeDelete(listTypeEntry *entry);
-void listTypeConvert(robj *subject, int enc);
-void unblockClientWaitingData(redisClient *c);
-int handleClientsWaitingListPush(redisClient *c, robj *key, robj *ele);
-void popGenericCommand(redisClient *c, int where);
-
-/* Synchronous I/O with timeout */
-int syncWrite(int fd, char *ptr, ssize_t size, int timeout);
-int syncRead(int fd, char *ptr, ssize_t size, int timeout);
-int syncReadLine(int fd, char *ptr, ssize_t size, int timeout);
-int fwriteBulkString(FILE *fp, char *s, unsigned long len);
-int fwriteBulkDouble(FILE *fp, double d);
-int fwriteBulkLongLong(FILE *fp, long long l);
-int fwriteBulkObject(FILE *fp, robj *obj);
-
-/* Sorted sets data type */
-zskiplist *zslCreate(void);
-void zslFree(zskiplist *zsl);
-zskiplistNode *zslInsert(zskiplist *zsl, double score, robj *obj);
-unsigned char *zzlInsert(unsigned char *zl, robj *ele, double score);
-double zzlGetScore(unsigned char *sptr);
-void zzlNext(unsigned char *zl, unsigned char **eptr, unsigned char **sptr);
-void zzlPrev(unsigned char *zl, unsigned char **eptr, unsigned char **sptr);
-unsigned int zsetLength(robj *zobj);
-void zsetConvert(robj *zobj, int encoding);
-
 /* Core functions */
 int freeMemoryIfNeeded(void);
-int processCommand(redisClient *c);
 void setupSignalHandlers(void);
 struct redisCommand *lookupCommand(sds name);
 struct redisCommand *lookupCommandByCString(char *s);
-void call(redisClient *c);
 int prepareForShutdown();
-void redisLog(int level, const char *fmt, ...);
-void usage();
 void updateDictResizePolicy(void);
 int htNeedsResize(dict *dict);
 void oom(const char *msg);
 void populateCommandTable(void);
 
-/* Set data type */
-robj *setTypeCreate(robj *value);
-int setTypeAdd(robj *subject, robj *value);
-int setTypeRemove(robj *subject, robj *value);
-int setTypeIsMember(robj *subject, robj *value);
-setTypeIterator *setTypeInitIterator(robj *subject);
-void setTypeReleaseIterator(setTypeIterator *si);
-int setTypeNext(setTypeIterator *si, robj **objele, int64_t *llele);
-robj *setTypeNextObject(setTypeIterator *si);
-int setTypeRandomElement(robj *setobj, robj **objele, int64_t *llele);
-unsigned long setTypeSize(robj *subject);
-void setTypeConvert(robj *subject, int enc);
-
-/* Hash data type */
-void convertToRealHash(robj *o);
-void hashTypeTryConversion(robj *subject, robj **argv, int start, int end);
-void hashTypeTryObjectEncoding(robj *subject, robj **o1, robj **o2);
-int hashTypeGet(robj *o, robj *key, robj **objval, unsigned char **v, unsigned int *vlen);
-robj *hashTypeGetObject(robj *o, robj *key);
-int hashTypeExists(robj *o, robj *key);
-int hashTypeSet(robj *o, robj *key, robj *value);
-int hashTypeDelete(robj *o, robj *key);
-unsigned long hashTypeLength(robj *o);
-hashTypeIterator *hashTypeInitIterator(robj *subject);
-void hashTypeReleaseIterator(hashTypeIterator *hi);
-int hashTypeNext(hashTypeIterator *hi);
-int hashTypeCurrent(hashTypeIterator *hi, int what, robj **objval, unsigned char **v, unsigned int *vlen);
-robj *hashTypeCurrentObject(hashTypeIterator *hi, int what);
-robj *hashTypeLookupWriteOrCreate(redisClient *c, robj *key);
-
-/* Git SHA1 */
-char *redisGitSHA1(void);
-char *redisGitDirty(void);
-
-/* Commands prototypes */
-
-// keys
-
-void delCommand(redisClient *c);
-void existsCommand(redisClient *c);
-void renameCommand(redisClient *c);
-void renamenxCommand(redisClient *c);
-void typeCommand(redisClient *c);
-
-// XXX(mgp): to add
-
-// void expireCommand(redisClient *c);
-// void expireatCommand(redisClient *c);
-// void keysCommand(redisClient *c);
-// void persistCommand(redisClient *c);
-// void randomkeyCommand(redisClient *c);
-// void sortCommand(redisClient *c);
-// void ttlCommand(redisClient *c);
-
 // XXX(mgp): for implementation
-
 // void multiCommand(redisClient *c);
 // void execCommand(redisClient *c);
 // void discardCommand(redisClient *c);
@@ -498,27 +373,5 @@ void free(void *ptr) __attribute__ ((deprecated));
 void *malloc(size_t size) __attribute__ ((deprecated));
 void *realloc(void *ptr, size_t size) __attribute__ ((deprecated));
 #endif
-
-void redisLogObjectDebugInfo(robj *o);
-
-/* XXX(mgp) from util.h */
-
-int ll2string(char *s, size_t len, long long value);
-int string2ll(char *s, size_t slen, long long *value);
-int string2l(char *s, size_t slen, long *value);
-int d2string(char *buf, size_t len, double value);
-
-/* XXX(mgp) from sds.h */
-
-sds sdsnewlen(const void *init, size_t initlen);
-sds sdsfromlonglong(long long value);
-void sdsfree(sds s);
-int sdscmp(sds s1, sds s2);
-sds sdsdup(const sds s);
-sds sdsgrowzero(sds s, size_t len);
-sds sdsempty();
-sds sdscatlen(sds s, void *t, size_t len);
-size_t sdslen(const sds s);
-size_t sdsavail(sds s);
 
 #endif
