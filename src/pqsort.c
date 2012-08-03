@@ -39,10 +39,6 @@
 
 #include <sys/types.h>
 
-#include <assert.h>
-#include <errno.h>
-#include <stdlib.h>
-
 static inline char	*med3 (char *, char *, char *,
     int (*)(const void *, const void *));
 static inline void	 swapfunc (char *, char *, size_t, int);

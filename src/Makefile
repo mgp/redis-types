@@ -48,6 +48,7 @@ adlist.o: adlist.c adlist.h zmalloc.h
 dict.o: dict.c fmacros.h dict.h zmalloc.h
 endian.o: endian.c
 intset.o: intset.c zmalloc.h endian.h
+pqsort.o: pqsort.c
 redis.o: redis.c redis.h dict.h adlist.h \
   zmalloc.h zipmap.h ziplist.h intset.h
 sds.o: sds.c zmalloc.h
