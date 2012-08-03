@@ -1,3 +1,6 @@
+#ifndef __ZIPLIST_H
+#define __ZIPLIST_H
+
 #define ZIPLIST_HEAD 0
 #define ZIPLIST_TAIL 1
 
@@ -13,3 +16,6 @@ unsigned char *ziplistDeleteRange(unsigned char *zl, unsigned int index, unsigne
 unsigned int ziplistCompare(unsigned char *p, unsigned char *s, unsigned int slen);
 unsigned int ziplistLen(unsigned char *zl);
 size_t ziplistBlobLen(unsigned char *zl);
+
+#endif
+

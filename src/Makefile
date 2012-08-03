@@ -63,7 +63,7 @@ t_string.o: t_string.c redis.h dict.h \
 t_zset.o: t_zset.c redis.h dict.h adlist.h \
   zmalloc.h zipmap.h ziplist.h intset.h
 util.o: util.c
-ziplist.o: ziplist.c zmalloc.h ziplist.h endian.h
+ziplist.o: ziplist.c zmalloc.h util.h endian.h
 zipmap.o: zipmap.c zmalloc.h endian.h
 zmalloc.o: zmalloc.c
 

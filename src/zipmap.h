@@ -47,3 +47,4 @@ size_t zipmapBlobLen(unsigned char *zm);
 void zipmapRepr(unsigned char *p);
 
 #endif
+

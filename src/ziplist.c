@@ -61,14 +61,15 @@
  */
 
 #include <stdio.h>
-#include <stdlib.h>
 #include <string.h>
 #include <stdint.h>
 #include <assert.h>
-#include <limits.h>
+
 #include "zmalloc.h"
-#include "ziplist.h"
+#include "util.h"
 #include "endian.h"
+
+#include "ziplist.h"
 
 #define ZIP_END 255
 #define ZIP_BIGLEN 254
