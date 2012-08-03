@@ -1,6 +1,22 @@
 #ifndef __T_HASH_H
 #define __T_HASH_H
 
+#include "dict.h"
+
+/* Structure to hold hash iteration abstration. Note that iteration over
+ * hashes involves both fields and values. Because it is possible that
+ * not both are required, store pointers in the iterator to avoid
+ * unnecessary memory allocation for fields/values. */
+typedef struct {
+    int encoding;
+    unsigned char *zi;
+    unsigned char *zk, *zv;
+    unsigned int zklen, zvlen;
+
+    dictIterator *di;
+    dictEntry *de;
+} hashTypeIterator;
+
 void convertToRealHash(robj *o);
 void hashTypeTryConversion(robj *subject, robj **argv, int start, int end);
 void hashTypeTryObjectEncoding(robj *subject, robj **o1, robj **o2);

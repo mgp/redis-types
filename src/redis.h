@@ -207,66 +207,6 @@ typedef struct _redisSortOperation {
     robj *pattern;
 } redisSortOperation;
 
-/* ZSETs use a specialized version of Skiplists */
-typedef struct zskiplistNode {
-    robj *obj;
-    double score;
-    struct zskiplistNode *backward;
-    struct zskiplistLevel {
-        struct zskiplistNode *forward;
-        unsigned int span;
-    } level[];
-} zskiplistNode;
-
-typedef struct zskiplist {
-    struct zskiplistNode *header, *tail;
-    unsigned long length;
-    int level;
-} zskiplist;
-
-typedef struct zset {
-    dict *dict;
-    zskiplist *zsl;
-} zset;
-
-/* Structure to hold list iteration abstraction. */
-typedef struct {
-    robj *subject;
-    unsigned char encoding;
-    unsigned char direction; /* Iteration direction */
-    unsigned char *zi;
-    listNode *ln;
-} listTypeIterator;
-
-/* Structure for an entry while iterating over a list. */
-typedef struct {
-    listTypeIterator *li;
-    unsigned char *zi;  /* Entry in ziplist */
-    listNode *ln;       /* Entry in linked list */
-} listTypeEntry;
-
-/* Structure to hold set iteration abstraction. */
-typedef struct {
-    robj *subject;
-    int encoding;
-    int ii; /* intset iterator */
-    dictIterator *di;
-} setTypeIterator;
-
-/* Structure to hold hash iteration abstration. Note that iteration over
- * hashes involves both fields and values. Because it is possible that
- * not both are required, store pointers in the iterator to avoid
- * unnecessary memory allocation for fields/values. */
-typedef struct {
-    int encoding;
-    unsigned char *zi;
-    unsigned char *zk, *zv;
-    unsigned int zklen, zvlen;
-
-    dictIterator *di;
-    dictEntry *de;
-} hashTypeIterator;
-
 #define REDIS_HASH_KEY 1
 #define REDIS_HASH_VALUE 2
 

@@ -3,10 +3,14 @@
 #include <limits.h>
 #include <string.h>
 
+#include "adlist.h"
+#include "dict.h"
 #include "intset.h"
 #include "sds.h"
+#include "t_zset.h"
 #include "util.h"
 #include "ziplist.h"
+#include "zipmap.h"
 #include "zmalloc.h"
 
 #include "object.h"

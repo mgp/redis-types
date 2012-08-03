@@ -1,6 +1,16 @@
 #ifndef __T_SET_H
 #define __T_SET_H
 
+#include "dict.h"
+
+/* Structure to hold set iteration abstraction. */
+typedef struct {
+    robj *subject;
+    int encoding;
+    int ii; /* intset iterator */
+    dictIterator *di;
+} setTypeIterator;
+
 robj *setTypeCreate(robj *value);
 int setTypeAdd(robj *subject, robj *value);
 int setTypeRemove(robj *subject, robj *value);
