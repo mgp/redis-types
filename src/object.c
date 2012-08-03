@@ -1,8 +1,15 @@
-#include "object.h"
-
-#include "redis.h"
 #include <pthread.h>
 #include <math.h>
+#include <limits.h>
+#include <string.h>
+
+#include "intset.h"
+#include "sds.h"
+#include "util.h"
+#include "ziplist.h"
+#include "zmalloc.h"
+
+#include "object.h"
 
 robj *createObject(int type, void *ptr) {
     robj *o = zmalloc(sizeof(*o));
@@ -182,14 +189,6 @@ void decrRefCount(void *obj) {
     }
 }
 
-int checkType(redisClient *c, robj *o, int type) {
-    if (o->type != type) {
-        addReply(c,shared.wrongtypeerr);
-        return 1;
-    }
-    return 0;
-}
-
 int isObjectRepresentableAsLongLong(robj *o, long long *llval) {
     redisAssert(o->type == REDIS_STRING);
     if (o->encoding == REDIS_ENCODING_INT) {
@@ -335,6 +334,16 @@ int getDoubleFromObject(robj *o, double *target) {
     return REDIS_OK;
 }
 
+/* XXX(mgp)
+
+int checkType(redisClient *c, robj *o, int type) {
+    if (o->type != type) {
+        addReply(c,shared.wrongtypeerr);
+        return 1;
+    }
+    return 0;
+}
+
 int getDoubleFromObjectOrReply(redisClient *c, robj *o, double *target, const char *msg) {
     double value;
     if (getDoubleFromObject(o, &value) != REDIS_OK) {
@@ -405,9 +414,12 @@ int getLongFromObjectOrReply(redisClient *c, robj *o, long *target, const char *
     *target = value;
     return REDIS_OK;
 }
+*/
 
 /* Given an object returns the min number of seconds the object was never
  * requested, using an approximated LRU algorithm. */
+
+/* XXX(mgp)
 unsigned long estimateObjectIdleTime(robj *o) {
     if (server.lruclock >= o->lru) {
         return (server.lruclock - o->lru) * REDIS_LRU_CLOCK_RESOLUTION;
@@ -416,4 +428,5 @@ unsigned long estimateObjectIdleTime(robj *o) {
                     REDIS_LRU_CLOCK_RESOLUTION;
     }
 }
+*/
 
