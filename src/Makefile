@@ -45,7 +45,7 @@ OBJ = adlist.o dict.o redis.o zmalloc.o zipmap.o ziplist.o t_string.o t_list.o t
 
 # Deps (use make dep to generate this)
 adlist.o: adlist.c adlist.h zmalloc.h
-dict.o: dict.c dict.h zmalloc.h
+dict.o: dict.c fmacros.h dict.h zmalloc.h
 endian.o: endian.c
 intset.o: intset.c intset.h zmalloc.h endian.h
 redis.o: redis.c redis.h dict.h adlist.h \
