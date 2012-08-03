@@ -76,11 +76,12 @@
  * This lowers the constant times considerably.
  */
 
-#include <stdio.h>
 #include <string.h>
-#include <assert.h>
+
 #include "zmalloc.h"
 #include "endian.h"
+
+#include "zipmap.h"
 
 #define ZIPMAP_BIGLEN 254
 #define ZIPMAP_END 255
