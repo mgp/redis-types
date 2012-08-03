@@ -50,6 +50,7 @@ endian.o: endian.c
 intset.o: intset.c intset.h zmalloc.h endian.h
 redis.o: redis.c redis.h dict.h adlist.h \
   zmalloc.h zipmap.h ziplist.h intset.h
+sds.o: sds.c zmalloc.h
 t_hash.o: t_hash.c redis.h dict.h adlist.h \
   zmalloc.h zipmap.h ziplist.h intset.h
 t_list.o: t_list.c redis.h dict.h adlist.h \
@@ -60,9 +61,10 @@ t_string.o: t_string.c redis.h dict.h \
   adlist.h zmalloc.h zipmap.h ziplist.h intset.h
 t_zset.o: t_zset.c redis.h dict.h adlist.h \
   zmalloc.h zipmap.h ziplist.h intset.h
+util.o: util.c
 ziplist.o: ziplist.c zmalloc.h ziplist.h endian.h
 zipmap.o: zipmap.c zmalloc.h endian.h
-zmalloc.o: zmalloc.c zmalloc.h
+zmalloc.o: zmalloc.c
 
 main: $(OBJ)
 	$(QUIET_LINK)$(CC) -o yourmom $(CCOPT) $(DEBUG) $(OBJ) $(CCLINK) $(ALLOC_LINK)
