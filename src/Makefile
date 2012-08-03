@@ -47,7 +47,7 @@ OBJ = adlist.o dict.o redis.o zmalloc.o zipmap.o ziplist.o t_string.o t_list.o t
 adlist.o: adlist.c adlist.h zmalloc.h
 dict.o: dict.c fmacros.h dict.h zmalloc.h
 endian.o: endian.c
-intset.o: intset.c intset.h zmalloc.h endian.h
+intset.o: intset.c zmalloc.h endian.h
 redis.o: redis.c redis.h dict.h adlist.h \
   zmalloc.h zipmap.h ziplist.h intset.h
 sds.o: sds.c zmalloc.h
